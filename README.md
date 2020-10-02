@@ -1,6 +1,6 @@
 # symbolic-emulation
 
-Symbolic emulation to achieve machine code re-targeting.
+Symbolic emulation to achieve machine code re-targeting. See [code](src/Top.hs)
 
 Idea is to start with a very minimal ISA, somewhat inspired by 8080.
 Code the emulation.
