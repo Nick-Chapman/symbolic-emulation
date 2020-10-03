@@ -122,59 +122,59 @@ semantics = \case
     return Next
 
   LDI (Immediate n) -> do
-    SetA (Byte n)
+    SetReg RegA (Byte n)
     return Next
 
   INP -> do
     i <- Inp
-    SetA i
+    SetReg RegA i
     return Next
 
   OUT -> do
-    a <- GetA
+    a <- GetReg RegA
     Out a
     return Next
 
   XAB -> do
-    a <- GetA
-    b <- GetB
-    SetA b
-    SetB a
+    a <- GetReg RegA
+    b <- GetReg RegB
+    SetReg RegA b
+    SetReg RegB a
     return Next
 
   XAC -> do
-    a <- GetA
-    c <- GetC
-    SetA c
-    SetC a
+    a <- GetReg RegA
+    c <- GetReg RegC
+    SetReg RegA c
+    SetReg RegC a
     return Next
 
   XAD -> do
-    a <- GetA
-    d <- GetD
-    SetA d
-    SetD a
+    a <- GetReg RegA
+    d <- GetReg RegD
+    SetReg RegA d
+    SetReg RegD a
     return Next
 
   DEC -> do
-    a <- GetA
-    SetA (decByte a)
+    a <- GetReg RegA
+    SetReg RegA (decByte a)
     return Next
 
   ADD -> do
-    a <- GetA
-    b <- GetB -- implicity takes uses B for 2nd arg of addition
-    SetA (addByte a b)
+    a <- GetReg RegA
+    b <- GetReg RegB -- implicity takes uses B for 2nd arg of addition
+    SetReg RegA (addByte a b)
     return Next
 
   JMP -> do
-    Byte n <- GetC -- implicitly uses C as the jump dest
+    Byte n <- GetReg RegC -- implicitly uses C as the jump dest
     return (Jump (Addr n))
 
   JNZ -> do
-    a <- GetA -- implicitly uses A for the zero-test
+    a <- GetReg RegA -- implicitly uses A for the zero-test
     if isZeroByte a then return Next else do
-      Byte n <- GetC -- implicitly uses C as the jump dest
+      Byte n <- GetReg RegC -- implicitly uses C as the jump dest
       return (Jump (Addr n))
 
 
@@ -187,15 +187,11 @@ data Eff a where -- Eff d a -- TODO: generlise Byte --> d
   Bind :: Eff a -> (a -> Eff b) -> Eff b
   Inp :: Eff Byte
   Out :: Byte -> Eff ()
-  GetA :: Eff Byte -- TODO: share Get/Set with data Reg = A|B|C
-  SetA :: Byte -> Eff ()
-  GetB :: Eff Byte
-  SetB :: Byte -> Eff ()
-  GetC :: Eff Byte
-  SetC :: Byte -> Eff ()
-  GetD :: Eff Byte
-  SetD :: Byte -> Eff ()
+  GetReg :: Reg -> Eff Byte
+  SetReg :: Reg -> Byte -> Eff ()
 
+
+data Reg = RegA | RegB | RegC | RegD
 
 data CpuState = CpuState
   { regA :: Byte
@@ -203,6 +199,20 @@ data CpuState = CpuState
   , regC :: Byte
   , regD :: Byte
   }
+
+getReg :: CpuState -> Reg -> Byte
+getReg CpuState{regA,regB,regC,regD} = \case
+  RegA -> regA
+  RegB -> regB
+  RegC -> regC
+  RegD -> regD
+
+setReg :: CpuState -> Byte -> Reg -> CpuState
+setReg s x = \case
+  RegA -> s { regA = x }
+  RegB -> s { regB = x }
+  RegC -> s { regC = x }
+  RegD -> s { regD = x }
 
 instance Show CpuState where
   show CpuState{regA,regB,regC,regD} = show (regA,regB,regC,regD)
@@ -243,19 +253,13 @@ emulate prog = runStar cpuState0 startAddr
           Next -> runStar s (nextAddr a)
 
     run :: CpuState -> Eff a -> (CpuState -> a -> IBC) -> IBC
-    run s@CpuState{regA,regB,regC,regD} act k = case act of
+    run s act k = case act of
       Ret x -> k s x
       Bind eff f -> run s eff $ \s a -> run s (f a) k
       Inp -> Input $ \i -> k s i
       Out d -> Output d (k s ())
-      GetA -> k s regA
-      SetA x -> k (s { regA = x }) ()
-      GetB -> k s regB
-      SetB x -> k (s { regB = x }) ()
-      GetC -> k s regC
-      SetC x -> k (s { regC = x }) ()
-      GetD -> k s regD
-      SetD x -> k (s { regD = x }) ()
+      GetReg reg -> k s (getReg s reg)
+      SetReg reg x -> k (setReg s x reg) ()
 
 
 newtype Addr = Addr Int
