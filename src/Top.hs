@@ -122,59 +122,59 @@ semantics = \case
     return Next
 
   LDI (Immediate n) -> do
-    SetReg RegA (Byte n)
+    SetReg A (Byte n)
     return Next
 
   INP -> do
     i <- Inp
-    SetReg RegA i
+    SetReg A i
     return Next
 
   OUT -> do
-    a <- GetReg RegA
+    a <- GetReg A
     Out a
     return Next
 
   XAB -> do
-    a <- GetReg RegA
-    b <- GetReg RegB
-    SetReg RegA b
-    SetReg RegB a
+    a <- GetReg A
+    b <- GetReg B
+    SetReg A b
+    SetReg B a
     return Next
 
   XAC -> do
-    a <- GetReg RegA
-    c <- GetReg RegC
-    SetReg RegA c
-    SetReg RegC a
+    a <- GetReg A
+    c <- GetReg C
+    SetReg A c
+    SetReg C a
     return Next
 
   XAD -> do
-    a <- GetReg RegA
-    d <- GetReg RegD
-    SetReg RegA d
-    SetReg RegD a
+    a <- GetReg A
+    d <- GetReg D
+    SetReg A d
+    SetReg D a
     return Next
 
   DEC -> do
-    a <- GetReg RegA
-    SetReg RegA (decByte a)
+    a <- GetReg A
+    SetReg A (decByte a)
     return Next
 
   ADD -> do
-    a <- GetReg RegA
-    b <- GetReg RegB -- implicity takes uses B for 2nd arg of addition
-    SetReg RegA (addByte a b)
+    a <- GetReg A
+    b <- GetReg B -- implicity takes uses B for 2nd arg of addition
+    SetReg A (addByte a b)
     return Next
 
   JMP -> do
-    Byte n <- GetReg RegC -- implicitly uses C as the jump dest
+    Byte n <- GetReg C -- implicitly uses C as the jump dest
     return (Jump (Addr n))
 
   JNZ -> do
-    a <- GetReg RegA -- implicitly uses A for the zero-test
+    a <- GetReg A -- implicitly uses A for the zero-test
     if isZeroByte a then return Next else do
-      Byte n <- GetReg RegC -- implicitly uses C as the jump dest
+      Byte n <- GetReg C -- implicitly uses C as the jump dest
       return (Jump (Addr n))
 
 
@@ -191,7 +191,7 @@ data Eff a where -- Eff d a -- TODO: generlise Byte --> d
   SetReg :: Reg -> Byte -> Eff ()
 
 
-data Reg = RegA | RegB | RegC | RegD
+data Reg = A | B | C | D
 
 data CpuState = CpuState
   { regA :: Byte
@@ -202,17 +202,17 @@ data CpuState = CpuState
 
 getReg :: CpuState -> Reg -> Byte
 getReg CpuState{regA,regB,regC,regD} = \case
-  RegA -> regA
-  RegB -> regB
-  RegC -> regC
-  RegD -> regD
+  A -> regA
+  B -> regB
+  C -> regC
+  D -> regD
 
 setReg :: CpuState -> Byte -> Reg -> CpuState
 setReg s x = \case
-  RegA -> s { regA = x }
-  RegB -> s { regB = x }
-  RegC -> s { regC = x }
-  RegD -> s { regD = x }
+  A -> s { regA = x }
+  B -> s { regB = x }
+  C -> s { regC = x }
+  D -> s { regD = x }
 
 instance Show CpuState where
   show CpuState{regA,regB,regC,regD} = show (regA,regB,regC,regD)
