@@ -1,5 +1,8 @@
 
-module Top (main,runInteractionIO) where
+module Top
+  ( main
+  , runInteractionIO
+  ) where
 
 import Control.Monad (ap,liftM)
 import Data.Map (Map)
@@ -109,10 +112,17 @@ data Instruction
   | JMP
   | JNZ
 
-data Flow = Halt | Next | Jump Byte
+data Flow a = Halt | Next | Jump a
 
-semantics :: Instruction -> Eff Flow
-semantics = \case
+data Ops a = Ops
+  { add :: a -> a -> a
+  , dec :: a -> a
+  , lit :: Int -> a
+  , isZero :: a -> Bool
+  }
+
+semantics :: Ops a -> Instruction -> Eff a (Flow a)
+semantics Ops{add,dec,lit,isZero} = \case
   HLT -> do
     return Halt
 
@@ -120,7 +130,7 @@ semantics = \case
     return Next
 
   LDI (Immediate n) -> do
-    SetReg A (Byte n)
+    SetReg A (lit n)
     return Next
 
   INP -> do
@@ -142,13 +152,13 @@ semantics = \case
 
   DEC -> do
     a <- GetReg A
-    SetReg A (decByte a)
+    SetReg A (dec a)
     return Next
 
   ADD -> do
     a <- GetReg A
     b <- GetReg B -- implicity takes uses B for 2nd arg of addition
-    SetReg A (addByte a b)
+    SetReg A (add a b)
     return Next
 
   JMP -> do
@@ -157,22 +167,22 @@ semantics = \case
 
   JNZ -> do
     a <- GetReg A -- implicitly uses A for the zero-test
-    if isZeroByte a then return Next else do
+    if isZero a then return Next else do
       dest <- GetReg C -- implicitly uses C as the jump dest
       return (Jump dest)
 
 
-instance Functor Eff where fmap = liftM
-instance Applicative Eff where pure = return; (<*>) = ap
-instance Monad Eff where return = Ret; (>>=) = Bind
+instance Functor (Eff d) where fmap = liftM
+instance Applicative (Eff d) where pure = return; (<*>) = ap
+instance Monad (Eff d) where return = Ret; (>>=) = Bind
 
-data Eff a where -- Eff d a -- TODO: generlise Byte --> d
-  Ret :: a -> Eff a
-  Bind :: Eff a -> (a -> Eff b) -> Eff b
-  Inp :: Eff Byte
-  Out :: Byte -> Eff ()
-  GetReg :: Reg -> Eff Byte
-  SetReg :: Reg -> Byte -> Eff ()
+data Eff d a where
+  Ret :: a -> Eff d a
+  Bind :: Eff d a -> (a -> Eff d b) -> Eff d b
+  Inp :: Eff d d
+  Out :: d -> Eff d ()
+  GetReg :: Reg -> Eff d d
+  SetReg :: Reg -> d -> Eff d ()
 
 
 data Reg = A | B | C | D
@@ -228,15 +238,15 @@ emulate prog = runStar cpuState0 startAddr
     runStar :: CpuState -> Addr -> IBC
     runStar s a =
       Internal (a,s) $
-      run s (semantics (fetch prog a)) afterwards
+      run s (semantics opsByte (fetch prog a)) afterwards
       where
-        afterwards :: CpuState -> Flow -> IBC
+        afterwards :: CpuState -> Flow Byte -> IBC
         afterwards s = \case
           Halt -> Stop
           Jump b -> runStar s (addrOfByte b)
           Next -> runStar s (nextAddr a)
 
-    run :: CpuState -> Eff a -> (CpuState -> a -> IBC) -> IBC
+    run :: CpuState -> Eff Byte a -> (CpuState -> a -> IBC) -> IBC
     run s act k = case act of
       Ret x -> k s x
       Bind eff f -> run s eff $ \s a -> run s (f a) k
@@ -269,3 +279,11 @@ decByte (Byte n) = Byte (n-1)
 
 addByte :: Byte -> Byte -> Byte
 addByte (Byte b1) (Byte b2) = Byte (b1+b2)
+
+opsByte :: Ops Byte
+opsByte = Ops
+  { add = addByte
+  , dec = decByte
+  , lit = Byte
+  , isZero = isZeroByte
+  }
