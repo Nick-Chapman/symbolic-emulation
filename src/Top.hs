@@ -109,7 +109,7 @@ data Instruction
   | JMP
   | JNZ
 
-data Flow = Halt | Next | Jump Addr
+data Flow = Halt | Next | Jump Byte
 
 semantics :: Instruction -> Eff Flow
 semantics = \case
@@ -152,14 +152,14 @@ semantics = \case
     return Next
 
   JMP -> do
-    Byte n <- GetReg C -- implicitly uses C as the jump dest
-    return (Jump (Addr n))
+    dest <- GetReg C -- implicitly uses C as the jump dest
+    return (Jump dest)
 
   JNZ -> do
     a <- GetReg A -- implicitly uses A for the zero-test
     if isZeroByte a then return Next else do
-      Byte n <- GetReg C -- implicitly uses C as the jump dest
-      return (Jump (Addr n))
+      dest <- GetReg C -- implicitly uses C as the jump dest
+      return (Jump dest)
 
 
 instance Functor Eff where fmap = liftM
@@ -233,7 +233,7 @@ emulate prog = runStar cpuState0 startAddr
         afterwards :: CpuState -> Flow -> IBC
         afterwards s = \case
           Halt -> Stop
-          Jump a -> runStar s a
+          Jump b -> runStar s (addrOfByte b)
           Next -> runStar s (nextAddr a)
 
     run :: CpuState -> Eff a -> (CpuState -> a -> IBC) -> IBC
@@ -252,6 +252,9 @@ instance Show Addr where show (Addr n) = "#" <> show n
 
 nextAddr :: Addr -> Addr
 nextAddr (Addr n) = Addr (n+1)
+
+addrOfByte :: Byte -> Addr
+addrOfByte (Byte n) = Addr n
 
 
 newtype Byte = Byte Int
