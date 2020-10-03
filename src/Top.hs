@@ -1,4 +1,5 @@
-module Top(main) where
+
+module Top (main,runInteractionIO) where
 
 import Control.Monad (ap,liftM)
 import Data.Map (Map)
@@ -7,22 +8,39 @@ import qualified Data.Map as Map
 
 main :: IO ()
 main = do
-  let _ = ()
   putStrLn "*symbolic-emulation*"
-  play
 
-play :: IO ()
-play = do
-  putStrLn "prog1..."
-  runInteractionIO [Byte (-10)] 15 (emulate prog1)
-  putStrLn "prog2..."
-  runInteractionIO [Byte 6, Byte 7] 0 (emulate prog2)
+  putStrLn $ "prog1: " <> show (check [Byte n | n <- [-2,-1,0,99]] $ runProg prog1 [Byte (-3)])
+  putStrLn $ "prog2: " <> show (check [Byte 42] $ runProg prog2 [Byte 6, Byte 7])
+
+  --runInteractionIO [Byte (-10)] 15 (emulate prog1)
+  --runInteractionIO [Byte 6, Byte 7] 0 (emulate prog2)
+
+
+check :: (Eq a, Show a) => a -> a -> a
+check x y = if x == y then x else error (show (x,y))
+
+
+runProg :: Prog -> [Byte] -> [Byte]
+runProg prog xs = runInteraction xs (emulate prog)
 
 data Interaction a s
   = Stop
   | Internal s (Interaction a s)
   | Output a (Interaction a s)
   | Input (a -> Interaction a s)
+
+runInteraction :: [a] -> Interaction a s -> [a]
+runInteraction = loop []
+  where
+    loop :: [a] -> [a] -> Interaction a s -> [a]
+    loop os xs = \case
+      Stop -> reverse os
+      Internal _s next -> loop os xs next
+      Input f -> case xs of
+        [] -> error "runInteraction, run out of input"
+        x:xs -> loop os xs (f x)
+      Output o next -> loop (o:os) xs next
 
 runInteractionIO :: (Show d, Show s) => [d] -> Int -> Interaction d s -> IO ()
 runInteractionIO = loop
@@ -31,7 +49,7 @@ runInteractionIO = loop
     loop xs limit = \case
       Stop -> putStrLn "**interaction, stop"
       Internal _s next -> do
-        --putStrLn $ "**internal state: " <> show _s
+        putStrLn $ "**internal state: " <> show _s
         loop xs limit next
       Input f -> case xs of
         [] -> do putStrLn "**interaction, run out of input"
@@ -206,7 +224,7 @@ makeProg xs = Prog f
         m :: Map Addr Instruction = Map.fromList [ (Addr n, x) | (n,x) <- zip [0..] xs ]
 
 
-type IBC = Interaction Byte CpuState
+type IBC = Interaction Byte (Addr,CpuState)
 
 emulate :: Prog -> IBC
 emulate prog = runStar cpuState0 startAddr
@@ -215,7 +233,7 @@ emulate prog = runStar cpuState0 startAddr
 
     runStar :: CpuState -> Addr -> IBC
     runStar s a =
-      Internal s $
+      Internal (a,s) $
       run s (semantics (fetch prog a)) afterwards
       where
         afterwards :: CpuState -> Flow -> IBC
@@ -242,12 +260,14 @@ emulate prog = runStar cpuState0 startAddr
 
 newtype Addr = Addr Int
   deriving (Eq,Ord)
+instance Show Addr where show (Addr n) = "#" <> show n
 
 nextAddr :: Addr -> Addr
 nextAddr (Addr n) = Addr (n+1)
 
 
 newtype Byte = Byte Int
+  deriving Eq
 instance Show Byte where show (Byte n) = show n
 
 isZeroByte :: Byte -> Bool
