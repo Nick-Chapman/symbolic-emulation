@@ -66,14 +66,14 @@ prog1 :: Prog
 prog1 = makeProg -- count up from input, printing incrementing numbers, until we reach 0
   [ NOP
   , LDI (Immediate 1)
-  , XAB
+  , XCH A B
   , INP
   -- label 4
   , ADD
   , OUT
-  , XAC
+  , XCH A C
   , LDI (Immediate 4)
-  , XAC
+  , XCH A C
   , JNZ
   , LDI (Immediate 99)
   , OUT
@@ -82,19 +82,19 @@ prog1 = makeProg -- count up from input, printing incrementing numbers, until we
 prog2 :: Prog -- multiply 2 inputs
 prog2 = makeProg
   [ INP
-  , XAB
+  , XCH A B
   , INP
   -- label 3
-  , XAC , LDI (Immediate 10) , XAC , JNZ
-  , XAD
+  , XCH A C , LDI (Immediate 10) , XCH A C , JNZ
+  , XCH A D
   , OUT
   , HLT
   -- label 10
   , DEC
-  , XAD
+  , XCH A D
   , ADD
-  , XAD
-  , XAC , LDI (Immediate 3) , XAC , JMP
+  , XCH A D
+  , XCH A C , LDI (Immediate 3) , XCH A C , JMP
   ]
 
 data Instruction
@@ -103,9 +103,7 @@ data Instruction
   | LDI Immediate -- in reality this would be in the next address
   | INP
   | OUT
-  | XAB
-  | XAC
-  | XAD
+  | XCH Reg Reg
   | DEC
   | ADD
   | JMP
@@ -135,25 +133,11 @@ semantics = \case
     Out a
     return Next
 
-  XAB -> do
-    a <- GetReg A
-    b <- GetReg B
-    SetReg A b
-    SetReg B a
-    return Next
-
-  XAC -> do
-    a <- GetReg A
-    c <- GetReg C
-    SetReg A c
-    SetReg C a
-    return Next
-
-  XAD -> do
-    a <- GetReg A
-    d <- GetReg D
-    SetReg A d
-    SetReg D a
+  XCH r1 r2 -> do
+    x <- GetReg r1
+    y <- GetReg r2
+    SetReg r2 x
+    SetReg r1 y
     return Next
 
   DEC -> do
